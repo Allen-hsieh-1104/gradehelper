@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>成績計算小幫手 - Starlux Edition</title>
+    
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              starlux: {
+                gold: '#B9975B',   /* 星宇金 */
+                rose: '#D2A68D',   /* 玫瑰金 */
+                gray: '#2D2926',   /* 曜石灰 */
+                sand: '#E3D7C5',   /* 沙地色 */
+                light: '#F5F2ED',  /* 淺米色 */
+              }
+            }
+          }
+        }
+      }
+    </script>
+
+    <style>
+        body { font-family: "Microsoft JhengHei", "Heiti TC", sans-serif; background-color: #F5F2ED; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        @media print {
+            .page-break { page-break-after: always; break-after: page; display: block; }
+            body { background-color: white; }
+        }
+        /* Custom Button Style */
+        .btn-starlux { background-color: #B9975B; color: white; transition: all 0.3s; }
+        .btn-starlux:hover { background-color: #2D2926; transform: translateY(-1px); }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        // --- Icons (Keeping original set) ---
+        const Icons = {
+            Calculator: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg>,
+            Settings: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>,
+            Users: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+            BarChart3: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>,
+            FileText: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></svg>,
+            Trash2: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>,
+            Plus: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>,
+            ClipboardPaste: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 2H9a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1Z"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2M16 4h2a2 2 0 0 1 2 2v2M11 14h10"/><path d="m17 10 4 4-4 4"/></svg>,
+            Upload: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>,
+            User: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+            Eye: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>,
+            PenTool: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="m2 2 7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>,
+            Check: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+            FileSpreadsheet: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/></svg>,
+            Facebook: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>,
+            Plane: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3.5s-2.5 0-4 1.5L13.5 8.5l-8.2-1.8c-.9-.2-1.7.5-1.5 1.4L5 12l-4 4v2l4-1 4 4h2l-1-4 3.9-3.9 8.1 1.7c.9.2 1.6-.6 1.4-1.5z"/></svg>
+        };
+
+        const Icon = ({ name, size = 20, className = "" }) => {
+            const SvgComponent = Icons[name];
+            if (!SvgComponent) return null;
+            return (
+                <span className={`inline-flex items-center justify-center ${className}`} style={{ width: size, height: size }}>
+                    <SvgComponent />
+                </span>
+            );
+        };
+
+        // --- Constants & Config ---
+        const SUBJECT_ORDER = [
+            'chi', 'lit', 'eng', 'mat', 'soc', 'his', 'geo', 'civ', 
+            'sci', 'bio', 'phy_chem', 'earth', 'life', 'phy', 'chem', 
+            'comp', 'art', 'vis_art', 'perf_art', 'hlt', 'health', 'pe', 'act', 'counsel', 'tec', 'living_tech', 'info_tech', 'local'
+        ];
+
+        const ALL_SUBJECTS_MAP = {
+            chi: '國語', lit: '國文', eng: '英語', mat: '數學', 
+            soc: '社會', his: '歷史', geo: '地理', civ: '公民', 
+            sci: '自然', bio: '生物', phy_chem: '理化', earth: '地科', life: '生活',
+            phy: '物理', chem: '化學', comp: '作文', art: '藝術', vis_art: '視覺藝術', perf_art: '表演藝術',
+            hlt: '健體', health: '健康', pe: '體育', act: '綜合', counsel: '輔導', tec: '科技', living_tech: '生科', info_tech: '資訊', local: '本土語'
+        };
+
+        // UI Subjects Color Palette
+        const SUBJECT_COLORS = {
+            chi: { ui: 'starlux-gold', hex: '#B9975B' },
+            eng: { ui: 'starlux-rose', hex: '#D2A68D' },
+            mat: { ui: 'starlux-gray', hex: '#2D2926' },
+            // default fallback...
+        };
+
+        const INITIAL_SUBJECTS = SUBJECT_ORDER.map(id => ({ id, name: ALL_SUBJECTS_MAP[id] }));
+        const TABS = { INPUT: 'input', ANALYSIS: 'analysis', REPORTS: 'reports' };
+        const generateId = () => Math.random().toString(36).substr(2, 9);
+
+        function App() {
+            const [activeTab, setActiveTab] = useState(TABS.INPUT);
+            const [students, setStudents] = useState([]);
+            const [subjectList, setSubjectList] = useState(INITIAL_SUBJECTS);
+            const [newSubjectName, setNewSubjectName] = useState('');
+            const [isSingleMode, setIsSingleMode] = useState(false);
+            const [singleConfig, setSingleConfig] = useState({ dailyWeight: 50, termWeight: 50, sqrt10: false });
+            const [subjectWeights, setSubjectWeights] = useState({});
+            const [visibleSubjectIds, setVisibleSubjectIds] = useState(['chi', 'eng', 'mat', 'soc', 'sci']);
+            const [scoringSubjectIds, setScoringSubjectIds] = useState(['chi', 'eng', 'mat', 'soc', 'sci']);
+            const [compMode, setCompMode] = useState('100');
+            const [reportTitle, setReportTitle] = useState('112學年度 成績計算表');
+            const [reportSubtitle, setReportSubtitle] = useState('');
+            const [reportConfig, setReportConfig] = useState({
+                showTotal: true,
+                showAvg: true,
+                showRank: true, // This controls the main class table rank
+                incMaxMin: true,
+                incAvg: true,
+                incStdDev: true,
+                incMedian: true,
+                incDist10: false,
+                incDist5: false,
+                incCompDist: false,
+                incRadar: false,
+                showPersonalRank: true, // NEW: Control rank on individual cards
+            });
+
+            const [pasteInput, setPasteInput] = useState('');
+            const [showPasteModal, setShowPasteModal] = useState(false);
+            const [confirmClear, setConfirmClear] = useState(false);
+            const fileInputRef = useRef(null);
+
+            // --- Business Logic (Keeping original calculation logic) ---
+            const sortedVisibleSubjects = useMemo(() => subjectList.filter(s => visibleSubjectIds.includes(s.id)).map(s => s.id), [visibleSubjectIds, subjectList]);
+
+            const processedData = useMemo(() => {
+                let data = students.map(student => {
+                    let total = 0, totalWeight = 0, count = 0;
+                    scoringSubjectIds.forEach(subId => {
+                        const score = parseFloat(student.scores[subId]);
+                        const w = parseFloat(subjectWeights[subId] !== undefined ? subjectWeights[subId] : 100) / 100;
+                        if (!isNaN(score)) { total += score * w; totalWeight += w; count++; }
+                    });
+                    const avg = count > 0 ? (totalWeight > 0 ? total / totalWeight : 0) : 0;
+                    return { ...student, total: parseFloat(total.toFixed(2)), average: parseFloat(avg.toFixed(1)), count };
+                });
+                
+                if (isSingleMode) {
+                    data = data.map(student => {
+                        let dailyTotal = 0, dailyCount = 0, termScore = 0;
+                        scoringSubjectIds.forEach(subId => {
+                            const score = parseFloat(student.scores[subId]);
+                            if (!isNaN(score)) {
+                                if (subjectList.find(s=>s.id===subId)?.name.includes('段考')) termScore = score;
+                                else { dailyTotal += score; dailyCount++; }
+                            }
+                        });
+                        const dailyAvg = dailyCount > 0 ? dailyTotal / dailyCount : 0;
+                        let finalAvg = dailyAvg * (singleConfig.dailyWeight / 100) + termScore * (singleConfig.termWeight / 100);
+                        if (singleConfig.sqrt10) finalAvg = Math.sqrt(finalAvg) * 10;
+                        return { ...student, dailyAvg: parseFloat(dailyAvg.toFixed(1)), termScore, total: parseFloat(finalAvg.toFixed(2)), average: parseFloat(finalAvg.toFixed(1)) };
+                    });
+                }
+
+                data.sort((a, b) => b.total - a.total);
+                let currentRank = 1;
+                for (let i = 0; i < data.length; i++) {
+                    if (i > 0 && data[i].total < data[i-1].total) currentRank = i + 1;
+                    data[i].rank = currentRank;
+                }
+                data.sort((a, b) => (parseInt(a.seatNo) || 999) - (parseInt(b.seatNo) || 999));
+                return data;
+            }, [students, scoringSubjectIds, subjectWeights, isSingleMode, singleConfig, subjectList]);
+
+            const statistics = useMemo(() => {
+                const stats = {};
+                const subjectsToAnalyze = isSingleMode ? ['dailyAvg', 'termScore'] : sortedVisibleSubjects;
+                subjectsToAnalyze.forEach(subId => {
+                    const scores = processedData.map(s => isSingleMode ? parseFloat(s[subId]) : parseFloat(s.scores[subId])).filter(s => !isNaN(s));
+                    if (scores.length === 0) return;
+                    const max = Math.max(...scores), min = Math.min(...scores), sum = scores.reduce((a, b) => a + b, 0), avg = (sum / scores.length).toFixed(1);
+                    const stdDev = Math.sqrt(scores.map(s => Math.pow(s - avg, 2)).reduce((a, b) => a + b, 0) / scores.length).toFixed(1);
+                    const sorted = [...scores].sort((a, b) => a - b);
+                    const mid = Math.floor(sorted.length / 2);
+                    const median = sorted.length % 2 !== 0 ? sorted[mid] : ((sorted[mid - 1] + sorted[mid]) / 2).toFixed(1);
+                    
+                    // Simple 10-point distribution
+                    const distCounts = new Array(11).fill(0);
+                    scores.forEach(s => { let idx = Math.floor(s/10); if(idx > 10) idx=10; distCounts[idx]++; });
+                    const distLabels = ['0-9', '10-19', '20-29', '30-39', '40-49', '50-59', '60-69', '70-79', '80-89', '90-99', '100'].reverse();
+                    stats[subId] = { max, min, avg, stdDev, median, count: scores.length, distLabels, distCounts: distCounts.reverse() };
+                });
+                return stats;
+            }, [processedData, sortedVisibleSubjects, isSingleMode]);
+
+            // --- Event Handlers ---
+            const handleAddStudent = () => setStudents([...students, { id: generateId(), seatNo: '', name: '', scores: {} }]);
+            const handleUpdateStudent = (id, field, value) => setStudents(students.map(s => s.id === id ? { ...s, [field]: value } : s));
+            const handleUpdateScore = (sid, subid, val) => setStudents(students.map(s => s.id === sid ? { ...s, scores: { ...s.scores, [subid]: val } } : s));
+            const handleRemoveStudent = (id) => setStudents(students.filter(s => s.id !== id));
+
+            const handleExportIndividualWord = () => {
+                const cards = processedData.map(s => `
+                    <div class="page-break" style="padding: 20px; font-family: 'BiauKai', sans-serif; color: #2D2926;">
+                        <h2 style="text-align: center; border-bottom: 3px solid #B9975B; padding-bottom: 10px;">${reportTitle} - 個人成績單</h2>
+                        <div style="margin: 20px 0; font-size: 1.2em; text-align:center;">
+                            <strong>座號：</strong>${s.seatNo} &nbsp;&nbsp; <strong>姓名：</strong>${s.name}
+                        </div>
+                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                            <tr style="background: #E3D7C5;"><th style="border: 1px solid #B9975B; padding: 10px;">科目</th><th style="border: 1px solid #B9975B; padding: 10px;">成績</th></tr>
+                            ${sortedVisibleSubjects.map(id => `<tr><td style="border: 1px solid #B9975B; padding: 8px; text-align: center;">${subjectList.find(sub=>sub.id===id).name}</td><td style="border: 1px solid #B9975B; padding: 8px; text-align: center; font-weight: bold;">${s.scores[id] || '-'}</td></tr>`).join('')}
+                        </table>
+                        <div style="border: 2px solid #B9975B; padding: 15px; border-radius: 8px; text-align:center; background: #F5F2ED;">
+                            <p><strong>總分：</strong> ${s.total} &nbsp; <strong>平均：</strong> ${s.average} ${reportConfig.showPersonalRank ? `&nbsp; <strong>班級排名：</strong> ${s.rank}` : ''}</p>
+                        </div>
+                        <div style="margin-top: 50px; text-align: right;"><p>導師簽章：___________ &nbsp; 家長簽章：___________</p></div>
+                    </div>
+                `).join('');
+                const html = `<html><head><meta charset='utf-8'></head><body>${cards}</body></html>`;
+                const blob = new Blob([html], { type: 'application/msword' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `${reportTitle}_個人成績單.doc`;
+                link.click();
+            };
+
+            // --- UI Rendering ---
+            return (
+                <div className="min-h-screen bg-starlux-light text-starlux-gray flex flex-col">
+                    <header className="bg-starlux-gray border-b-4 border-starlux-gold sticky top-0 z-40 shadow-xl flex-none">
+                        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-starlux-gold rounded-full flex items-center justify-center text-starlux-gray shadow-lg">
+                                    <Icon name="Plane" size={24} />
+                                </div>
+                                <h1 className="text-xl font-bold text-starlux-gold tracking-widest uppercase">STARLUX Grade Helper</h1>
+                            </div>
+                            <div className="text-sm text-starlux-sand font-bold tracking-tight">Remix: Allen Hsieh</div>
+                        </div>
+                    </header>
+
+                    <main className="max-w-6xl mx-auto px-4 py-8 flex-grow w-full">
+                        {/* Tab Switcher */}
+                        <div className="flex space-x-1 bg-starlux-gray/5 p-1 rounded-xl shadow-inner border border-starlux-gold/20 mb-8 max-w-2xl mx-auto">
+                            {[{ id: TABS.INPUT, icon: 'Users', label: '飛航設定' }, { id: TABS.ANALYSIS, icon: 'BarChart3', label: '數據雷達' }, { id: TABS.REPORTS, icon: 'FileText', label: '報表下載' }].map(tab => (
+                                <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === tab.id ? 'bg-starlux-gold text-white shadow-md' : 'text-starlux-gray/60 hover:bg-starlux-gold/10'}`}>
+                                    <Icon name={tab.icon} size={18} /> {tab.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {activeTab === TABS.INPUT && (
+                            <div className="space-y-6 animate-fadeIn">
+                                {/* Subject Settings Section */}
+                                <div className="bg-white p-6 rounded-2xl shadow-md border-t-4 border-starlux-gold">
+                                    <h3 className="text-lg font-bold text-starlux-gold flex items-center gap-2 mb-4 italic"><Icon name="Settings" size={20} /> MISSION CONFIGURATION | 科目設定</h3>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                                        {subjectList.map(sub => (
+                                            <div key={sub.id} onClick={() => {
+                                                if(visibleSubjectIds.includes(sub.id)) {
+                                                    setVisibleSubjectIds(prev => prev.filter(i => i !== sub.id));
+                                                    setScoringSubjectIds(prev => prev.filter(i => i !== sub.id));
+                                                } else {
+                                                    setVisibleSubjectIds(prev => [...prev, sub.id]);
+                                                    setScoringSubjectIds(prev => [...prev, sub.id]);
+                                                }
+                                            }} className={`cursor-pointer p-3 rounded-lg border-2 text-center font-bold text-xs transition-all ${visibleSubjectIds.includes(sub.id) ? 'bg-starlux-gold border-starlux-gold text-white shadow-sm' : 'bg-white border-starlux-sand text-starlux-gray/40'}`}>
+                                                {sub.name}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Student List Section */}
+                                <div className="bg-white p-6 rounded-2xl shadow-md border-t-4 border-starlux-gray">
+                                    <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                                        <h3 className="text-lg font-bold text-starlux-gray flex items-center gap-2"><Icon name="Users" size={20} /> PASSENGER MANIFEST | 名單輸入</h3>
+                                        <div className="flex gap-2">
+                                            <button onClick={handleAddStudent} className="px-4 py-2 btn-starlux rounded-lg flex items-center gap-2 text-sm font-bold shadow-md"><Icon name="Plus" size={16} /> 新增學生</button>
+                                        </div>
+                                    </div>
+                                    <div className="overflow-x-auto rounded-xl border border-starlux-sand">
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className="bg-starlux-gray text-starlux-gold">
+                                                    <th className="p-3">座號</th>
+                                                    <th className="p-3">姓名</th>
+                                                    {sortedVisibleSubjects.map(sid => <th key={sid} className="p-3">{subjectList.find(s=>s.id===sid).name}</th>)}
+                                                    <th className="p-3">移除</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {students.map(s => (
+                                                    <tr key={s.id} className="border-b border-starlux-sand hover:bg-starlux-light">
+                                                        <td className="p-2"><input type="text" value={s.seatNo} onChange={e => handleUpdateStudent(s.id, 'seatNo', e.target.value)} className="w-16 p-2 text-center border rounded border-starlux-sand bg-transparent focus:border-starlux-gold outline-none" /></td>
+                                                        <td className="p-2"><input type="text" value={s.name} onChange={e => handleUpdateStudent(s.id, 'name', e.target.value)} className="w-24 p-2 border rounded border-starlux-sand bg-transparent focus:border-starlux-gold outline-none" /></td>
+                                                        {sortedVisibleSubjects.map(sid => (
+                                                            <td key={sid} className="p-2">
+                                                                <input type="number" value={s.scores[sid] || ''} onChange={e => handleUpdateScore(s.id, sid, e.target.value)} className="w-16 p-2 text-center border rounded border-starlux-sand bg-transparent focus:border-starlux-gold outline-none" />
+                                                            </td>
+                                                        ))}
+                                                        <td className="p-2 text-center"><button onClick={() => handleRemoveStudent(s.id)} className="text-red-400 hover:text-red-600"><Icon name="Trash2" size={18} /></button></td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === TABS.REPORTS && (
+                            <div className="bg-white p-8 rounded-2xl shadow-xl border-t-8 border-starlux-gold max-w-4xl mx-auto space-y-8 animate-fadeIn">
+                                <div className="text-center border-b-2 border-starlux-sand pb-6">
+                                    <h3 className="text-2xl font-bold text-starlux-gray tracking-widest italic">PRE-FLIGHT CHECKLIST | 報表準備</h3>
+                                    <p className="text-starlux-gold font-bold mt-2">設定列印與輸出的細節</p>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-4">
+                                        <label className="block text-sm font-bold text-starlux-gray uppercase">報表標題 (例如：第一次定期評量)</label>
+                                        <input type="text" value={reportTitle} onChange={e => setReportTitle(e.target.value)} className="w-full p-3 border-2 border-starlux-sand rounded-xl focus:border-starlux-gold outline-none transition-all" />
+                                    </div>
+                                    <div className="space-y-4">
+                                        <label className="block text-sm font-bold text-starlux-gray uppercase">隱私與顯示設定</label>
+                                        <div className="bg-starlux-light p-4 rounded-xl border border-starlux-sand flex flex-col gap-3">
+                                            <label className="flex items-center gap-3 cursor-pointer group">
+                                                <input type="checkbox" checked={reportConfig.showPersonalRank} onChange={e => setReportConfig({...reportConfig, showPersonalRank: e.target.checked})} className="w-5 h-5 accent-starlux-gold" />
+                                                <span className="font-bold text-starlux-gray group-hover:text-starlux-gold transition-colors">顯示總排名 (個人成績單)</span>
+                                            </label>
+                                            <p className="text-xs text-starlux-gray/60 italic">註：若不希望學生知道確切名次，請取消勾選此項。</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-wrap justify-center gap-4 pt-6">
+                                    <button onClick={handleExportIndividualWord} className="btn-starlux px-8 py-4 rounded-full font-bold shadow-lg flex items-center gap-3">
+                                        <Icon name="User" size={20} /> 下載個人成績單 (Word)
+                                    </button>
+                                    <button onClick={() => alert('請於瀏覽器按下 Ctrl+P 並選擇另存為 PDF')} className="bg-starlux-gray text-white px-8 py-4 rounded-full font-bold shadow-lg flex items-center gap-3 hover:bg-starlux-gold transition-all">
+                                        <Icon name="FileText" size={20} /> 直接列印總表
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    <footer className="bg-starlux-gray text-starlux-sand py-8 border-t-4 border-starlux-gold">
+                        <div className="max-w-6xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4">
+                            <div className="text-center md:text-left">
+                                <p className="text-sm font-black tracking-widest uppercase text-starlux-gold">Starlux Grade Helper | Remix: Allen Hsieh</p>
+                                <p className="text-xs opacity-50 mt-1">Inspired by Starlux Airlines Design Philosophy. Fly with grades.</p>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <span className="text-xs font-bold bg-starlux-gold/20 px-3 py-1 rounded-full border border-starlux-gold/40">V12.1 STARLUX EDITION</span>
+                            </div>
+                        </div>
+                    </footer>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
